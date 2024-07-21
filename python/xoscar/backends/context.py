@@ -29,7 +29,7 @@ from ..errors import CannotCancelTask
 from ..utils import dataslots, fix_all_zero_ip
 from .allocate_strategy import AddressSpecified, AllocateStrategy
 from .communication import Client, UCXClient
-from .core import ActorCaller, CallerClient
+from .core import ActorCallerThreaded, CallerClient
 from .message import (
     DEFAULT_PROTOCOL,
     ActorRefMessage,
@@ -65,7 +65,7 @@ class IndigenActorContext(BaseActorContext):
 
     def __init__(self, address: str | None = None):
         BaseActorContext.__init__(self, address)
-        self._caller = ActorCaller()
+        self._caller = ActorCallerThreaded()
 
     def __del__(self):
         self._caller.stop_nonblock()
