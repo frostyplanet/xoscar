@@ -1596,3 +1596,72 @@ async def test_process_in_actor():
             allocate_strategy=RandomSubPool(),
         )
         assert 2 == await ref.run(1)
+
+
+def get_open_fds() -> int:
+    # NOTE: psutil open_files not work correctly
+    return len(os.listdir("/proc/self/fd"))
+
+
+@pytest.mark.asyncio
+@require_unix
+async def test_idle_timeout():
+    port = get_next_port()
+
+    async def _server():
+        addr = f"127.0.0.1:{port}"
+        start_method = (
+            os.environ.get("POOL_START_METHOD", "forkserver")
+            if sys.platform != "win32"
+            else None
+        )
+        pool = await create_actor_pool(
+            addr,
+            pool_cls=MainActorPool,
+            n_process=0,
+            subprocess_start_method=start_method,
+            extra_conf={"listen_elastic_ip": True},
+        )
+        async with pool:
+            # test global router
+            global_router = Router.get_instance()
+            # global router should not be the identical one with pool's router
+            assert global_router is not pool.router
+            assert pool.external_address in global_router._curr_external_addresses
+            assert pool.external_address in global_router._mapping
+            assert pool.external_address == addr
+            ctx = get_context()
+            await ctx.create_actor(
+                TestActor, uid="test-1", address=pool.external_address
+            )
+            await pool.join()
+
+    def server():
+        loop = asyncio.new_event_loop()
+        task = loop.create_task(_server())
+        loop.run_until_complete(task)
+
+    from multiprocessing import Process
+
+    p = Process(target=server, args=())
+    p.start()
+    idle_timeout = 2
+    # set idle_timeout shorter
+    os.environ["XOSCAR_IDLE_TIMEOUT"] = str(idle_timeout)
+
+    try:
+        await asyncio.sleep(2)
+        ctx = get_context()
+        fds_origin = get_open_fds()
+        actor_ref = await ctx.actor_ref(address=f"127.0.0.1:{port}", uid="test-1")
+        # Expect established connection will increase fd usage
+        assert fds_origin + 1 == get_open_fds()
+        assert await actor_ref.add(3) == 3
+        assert fds_origin + 1 == get_open_fds()
+        await asyncio.sleep(idle_timeout * 2)
+        # Expect connection will close after idle_timeout
+        assert fds_origin == get_open_fds()
+
+        await ctx.destroy_actor(actor_ref)
+    finally:
+        p.kill()
