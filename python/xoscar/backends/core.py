@@ -196,8 +196,15 @@ class CallerClient:
                 try:
                     message: _MessageBase = await client.recv()
                     self._last_used = time.time()
-                except (EOFError, ConnectionError, BrokenPipeError):
+                except (
+                    EOFError,
+                    ConnectionError,
+                    BrokenPipeError,
+                    AssertionError,
+                ) as e:
+                    # AssertionError is from get_header
                     # remote server closed, close client and raise ServerClosed
+                    logger.debug(f"{client.dest_address} close due to {e}")
                     try:
                         await client.close()
                     except (ConnectionError, BrokenPipeError):
