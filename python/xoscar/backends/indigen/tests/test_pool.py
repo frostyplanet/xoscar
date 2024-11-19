@@ -1610,6 +1610,10 @@ async def test_idle_timeout():
     idle_timeout = 2
     # set idle_timeout shorter
 
+    ctx = get_context()
+    # clear CallerClient in context to make idle_timeout change effective
+    ctx.clear_context()
+
     async def _server():
         os.environ["XOSCAR_IDLE_TIMEOUT"] = str(idle_timeout)
         addr = f"127.0.0.1:{port}"
@@ -1654,8 +1658,6 @@ async def test_idle_timeout():
     try:
         await asyncio.sleep(2)
         ctx = get_context()
-        print(ctx)
-        ctx.clear_context()
         fds_origin = get_open_fds()
         actor_ref = await ctx.actor_ref(address=addr, uid="test-1")
         # Expect established connection will increase fd usage
