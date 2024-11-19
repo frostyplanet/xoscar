@@ -70,6 +70,10 @@ class IndigenActorContext(BaseActorContext):
     def __del__(self):
         self._caller.stop_nonblock()
 
+    def clear_context(self):
+        """For test cases"""
+        self._caller.stop_nonblock()
+
     async def _call(
         self, address: str, message: _MessageBase, wait: bool = True
     ) -> Union[ResultMessage, ErrorMessage, asyncio.Future]:

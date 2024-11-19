@@ -298,6 +298,12 @@ cdef class ClientActorContext(BaseActorContext):
         context = self._get_backend_context(actor_ref.address)
         return context.actor_ref(actor_ref)
 
+    def clear_context(self):
+        """ Clear context connections and backend threads """
+        for backend in self._backend_contexts.values():
+            backend.clear_context()
+
+
     def send(
         self,
         ActorRef actor_ref,

@@ -1607,8 +1607,11 @@ def get_open_fds() -> int:
 @require_unix
 async def test_idle_timeout():
     port = get_next_port()
+    idle_timeout = 2
+    # set idle_timeout shorter
 
     async def _server():
+        os.environ["XOSCAR_IDLE_TIMEOUT"] = str(idle_timeout)
         addr = f"127.0.0.1:{port}"
         start_method = (
             os.environ.get("POOL_START_METHOD", "forkserver")
@@ -1645,15 +1648,16 @@ async def test_idle_timeout():
 
     p = Process(target=server, args=())
     p.start()
-    idle_timeout = 2
-    # set idle_timeout shorter
-    os.environ["XOSCAR_IDLE_TIMEOUT"] = str(idle_timeout)
+    addr = f"127.0.0.1:{port}"
 
+    os.environ["XOSCAR_IDLE_TIMEOUT"] = str(idle_timeout)
     try:
         await asyncio.sleep(2)
         ctx = get_context()
+        print(ctx)
+        ctx.clear_context()
         fds_origin = get_open_fds()
-        actor_ref = await ctx.actor_ref(address=f"127.0.0.1:{port}", uid="test-1")
+        actor_ref = await ctx.actor_ref(address=addr, uid="test-1")
         # Expect established connection will increase fd usage
         assert fds_origin + 1 == get_open_fds()
         assert await actor_ref.add(3) == 3
@@ -1664,4 +1668,5 @@ async def test_idle_timeout():
 
         await ctx.destroy_actor(actor_ref)
     finally:
+        del os.environ["XOSCAR_IDLE_TIMEOUT"]
         p.kill()
